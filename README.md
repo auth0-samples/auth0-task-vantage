@@ -39,7 +39,7 @@ vercel/              # Deployment configurations
 ├── mcp/            # MCP service deployment
 ├── agent/          # Agent service deployment
 └── webapp/         # Web app deployment
-```  
+```
 
 ## ⚡ Quick Start
 
