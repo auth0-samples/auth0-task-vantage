@@ -3,9 +3,8 @@ import * as env from './env.js';
 import { exchangeCustomToken } from './auth.js';
 import { createLogger } from '../utils/logger.js';
 
-// NOTE: This is a temporary implementation of Custom Token Exchange (CTE).
-// SDK support is in progress: https://github.com/auth0/auth0-auth-js/pull/75
-// Once the SDK support is merged, this manual implementation can be replaced.
+// Custom Token Exchange (CTE) implementation using @auth0/auth0-api-js SDK
+// See: https://auth0.com/docs/authenticate/custom-token-exchange
 
 const log = createLogger('mcp-client');
 
@@ -58,28 +57,23 @@ async function bearerForUpstream(subjectToken) {
     const key = makeKey(subjectToken);
     const now = Date.now();
     const cached = tokenCache.get(key);
-    if (cached && cached.expiresAt - SKEW_MS > now) {
+    if (cached && cached.expiresAt > now) {
         log.log('TOKEN: cached');
         return { token: cached.accessToken, scopes: cached.scopes };
     }
 
     try {
         log.log('TOKEN: exchanging...');
-        const res = await exchangeCustomToken(subjectToken);
-        const ttlMs = (typeof res.expires_in === 'number' ? res.expires_in : 60) * 1000;
-        
-        // Extract scopes from the exchanged token
-        let scopes = null;
-        if (res.access_token) {
-            try {
-                const payload = JSON.parse(Buffer.from(res.access_token.split('.')[1], 'base64').toString());
-                scopes = payload.scope;
-            } catch (e) {
-                // Ignore scope extraction errors
-            }
-        }
-        
-        const record = { accessToken: res.access_token, scopes, expiresAt: now + ttlMs };
+        const result = await exchangeCustomToken(subjectToken);
+
+        // SDK returns expiresAt in seconds since epoch, convert to ms and apply skew
+        const expiresAtMs = result.expiresAt * 1000 - SKEW_MS;
+
+        const record = {
+            accessToken: result.accessToken,
+            scopes: result.scope,  // SDK provides scope directly
+            expiresAt: expiresAtMs
+        };
         tokenCache.set(key, record);
         evictIfNeeded();
         log.log('TOKEN: cached');
