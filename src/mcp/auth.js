@@ -1,48 +1,40 @@
 import * as env from './env.js';
-import { ApiClient, VerifyAccessTokenError } from "@auth0/auth0-api-js";
-import {
-  InsufficientScopeError,
-  InvalidTokenError,
-} from "@modelcontextprotocol/sdk/server/auth/errors.js";
-import { getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
-import { createLogger } from '../utils/logger.js';
+import {ApiClient, VerifyAccessTokenError} from "@auth0/auth0-api-js";
+import {InvalidTokenError,} from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import {createLogger} from '../utils/logger.js';
 
 const log = createLogger('mcp-auth');
 
-// See https://auth0.com/docs/authenticate/custom-token-exchange#call-token-exchange
+// ApiClient instance for token exchange (separate from auth verification)
+let exchangeClient = null;
+
+function getExchangeClient() {
+  if (!exchangeClient && env.CTE_ENABLED) {
+    exchangeClient = new ApiClient({
+      domain: env.AUTH0_DOMAIN,
+      audience: env.API_AUTH0_AUDIENCE,
+      clientId: env.MCP_AUTH0_CLIENT_ID,
+      clientSecret: env.MCP_AUTH0_CLIENT_SECRET,
+    });
+  }
+  return exchangeClient;
+}
+
+// See https://auth0.com/docs/authenticate/custom-token-exchange
 export async function exchangeCustomToken(subjectToken) {
     if (!env.CTE_ENABLED) throw new Error('cte not configured');
 
-    const form = new URLSearchParams({
-        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-        audience: env.API_AUTH0_AUDIENCE,
-        subject_token_type: env.MCP_AUTH0_SUBJECT_TOKEN_TYPE,
-        subject_token: subjectToken,
-        client_id: env.MCP_AUTH0_CLIENT_ID,
-        client_secret: env.MCP_AUTH0_CLIENT_SECRET,
-    });
-    if (env.MCP_AUTH0_EXCHANGE_SCOPE) form.set('scope', env.MCP_AUTH0_EXCHANGE_SCOPE);
-
-    const res = await fetch(`https://${env.AUTH0_DOMAIN}/oauth/token`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: form,
-    });
-
-    if (!res.ok) {
-        let msg = `${res.status}`;
-        try {
-            const j = await res.json();
-            msg = `${j.error || 'error'}: ${j.error_description || ''}`.trim();
-        } catch {
-            msg = `${msg} ${await res.text().catch(() => '')}`.trim();
-        }
-        throw new Error(msg);
+    const client = getExchangeClient();
+    if (!client) {
+        throw new Error('Token exchange client not configured');
     }
 
-    const json = await res.json();
-    if (!json.access_token) throw new Error('no access_token in response');
-    return json; // full token set
+    // SDK returns: { accessToken, expiresAt, scope?, idToken?, refreshToken?, ... }
+    return await client.getTokenByExchangeProfile(subjectToken, {
+      subjectTokenType: env.MCP_AUTH0_SUBJECT_TOKEN_TYPE,
+      audience: env.API_AUTH0_AUDIENCE,
+      ...(env.MCP_AUTH0_EXCHANGE_SCOPE && { scope: env.MCP_AUTH0_EXCHANGE_SCOPE }),
+    });
 }
 
 function isNonEmptyString(value) {
