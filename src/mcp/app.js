@@ -302,14 +302,16 @@ export default function createApp() {
     return c.redirect(`https://${env.AUTH0_DOMAIN}/.well-known/oauth-authorization-server`, 302);
   });
 
-  // PRM endpoint so compliant clients discover the AS (only when auth is enabled)
+  // PRM endpoint at /mcp path for RFC 9728 compliance (only when auth is enabled)
+  // RFC 9728 §3.3 requires: resource value MUST equal the identifier used to build the well-known URL
+  // For resource "https://example.com/mcp", the PRM must be at "/.well-known/oauth-protected-resource/mcp"
   if (env.AUTH_ENABLED) {
-    app.get('/.well-known/oauth-protected-resource', (c) => {
+    app.get('/.well-known/oauth-protected-resource/mcp', (c) => {
       const url = new URL(c.req.url);
       const baseUrl = `${url.protocol}//${url.host}`;
       const metadata = generateProtectedResourceMetadata({
         authServerUrls: env.AUTH0_DOMAIN ? [`https://${env.AUTH0_DOMAIN}`] : [],
-        resourceUrl: `${baseUrl}/mcp`, // NOTE:This is a requirement for VS Code
+        resourceUrl: `${baseUrl}/mcp`,
       });
       return c.json(metadata, {
         headers: {
@@ -317,7 +319,7 @@ export default function createApp() {
         }
       });
     });
-    app.options('/.well-known/oauth-protected-resource', (c) =>
+    app.options('/.well-known/oauth-protected-resource/mcp', (c) =>
       metadataCorsOptionsRequestHandler()(c.req.raw)
     );
   }

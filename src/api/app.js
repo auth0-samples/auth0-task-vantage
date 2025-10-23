@@ -104,7 +104,7 @@ app.get('/tasks', async c => {
   const err = requireScope('tasks:read')(c); if (err) return err;
 
   const { orgId } = getAuth(c);
-  const qp = c.req.query;
+  const qp = c.req.query();
   const projectId = qp.projectId;
   const ownerId = qp.ownerId;
   const status = qp.status;
