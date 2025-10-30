@@ -5,34 +5,27 @@ import {createLogger} from '../utils/logger.js';
 
 const log = createLogger('mcp-auth');
 
-// ApiClient instance for token exchange (separate from auth verification)
-let exchangeClient = null;
-
-function getExchangeClient() {
-  if (!exchangeClient && env.CTE_ENABLED) {
-    exchangeClient = new ApiClient({
-      domain: env.AUTH0_DOMAIN,
-      audience: env.API_AUTH0_AUDIENCE,
-      clientId: env.MCP_AUTH0_CLIENT_ID,
-      clientSecret: env.MCP_AUTH0_CLIENT_SECRET,
-    });
-  }
-  return exchangeClient;
-}
+// Resource server's OAuth 2.0 client for token verification and exchange
+// Configured with the MCP resource server's audience
+const apiClient = env.AUTH_ENABLED ? new ApiClient({
+  domain: env.AUTH0_DOMAIN,
+  audience: env.MCP_AUTH0_AUDIENCE,
+  ...(env.CTE_ENABLED && {
+    clientId: env.MCP_AUTH0_CLIENT_ID,
+    clientSecret: env.MCP_AUTH0_CLIENT_SECRET,
+  }),
+}) : null;
 
 // See https://auth0.com/docs/authenticate/custom-token-exchange
 export async function exchangeCustomToken(subjectToken) {
     if (!env.CTE_ENABLED) throw new Error('cte not configured');
 
-    const client = getExchangeClient();
-    if (!client) {
-        throw new Error('Token exchange client not configured');
-    }
-
+    // Use the resource server's OAuth 2.0 client to exchange tokens
+    // The 'audience' parameter specifies the target audience for the exchanged token
     // SDK returns: { accessToken, expiresAt, scope?, idToken?, refreshToken?, ... }
-    return await client.getTokenByExchangeProfile(subjectToken, {
+    return await apiClient.getTokenByExchangeProfile(subjectToken, {
       subjectTokenType: env.MCP_AUTH0_SUBJECT_TOKEN_TYPE,
-      audience: env.API_AUTH0_AUDIENCE,
+      audience: env.API_AUTH0_AUDIENCE, // Target audience for the exchanged token
       ...(env.MCP_AUTH0_EXCHANGE_SCOPE && { scope: env.MCP_AUTH0_EXCHANGE_SCOPE }),
     });
 }
@@ -41,12 +34,7 @@ function isNonEmptyString(value) {
   return typeof value === "string" && value.length > 0;
 }
 
-export const createMcpAuthFunction = (auth0Domain, auth0Audience) => {
-  const apiClient = new ApiClient({
-    domain: auth0Domain,
-    audience: auth0Audience,
-  });
-
+export const createMcpAuthFunction = () => {
   return async (request, bearer) => {
     if (!bearer) {
       log.error('MCP Auth failed: Missing bearer token');

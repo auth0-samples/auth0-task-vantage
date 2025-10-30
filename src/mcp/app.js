@@ -285,7 +285,7 @@ function createSession(extra) {
 const handler = env.AUTH_ENABLED
   ? withMcpAuth(
     (req) => baseHandler(req),
-    createMcpAuthFunction(env.AUTH0_DOMAIN, env.MCP_AUTH0_AUDIENCE),
+    createMcpAuthFunction(),
     { required: true }
   )
   : baseHandler;
