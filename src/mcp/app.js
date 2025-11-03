@@ -302,10 +302,8 @@ export default function createApp() {
     return c.redirect(`https://${env.AUTH0_DOMAIN}/.well-known/oauth-authorization-server`, 302);
   });
 
-  // PRM endpoints for RFC 9728 compliance (only when auth is enabled)
-  // RFC 9728 §3.3: For resource "https://example.com/mcp", PRM must be at:
-  // 1. /.well-known/oauth-protected-resource/mcp (matching path)
-  // 2. /.well-known/oauth-protected-resource (root fallback)
+  // Protected Resource Metadata (PRM) endpoints - RFC 9728 §3, MCP 2025-06-18
+  // https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#authorization-server-location
   if (env.AUTH_ENABLED) {
     const prmHandler = (c) => {
       const url = new URL(c.req.url);
