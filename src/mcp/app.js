@@ -302,11 +302,10 @@ export default function createApp() {
     return c.redirect(`https://${env.AUTH0_DOMAIN}/.well-known/oauth-authorization-server`, 302);
   });
 
-  // PRM endpoint at /mcp path for RFC 9728 compliance (only when auth is enabled)
-  // RFC 9728 §3.3 requires: resource value MUST equal the identifier used to build the well-known URL
-  // For resource "https://example.com/mcp", the PRM must be at "/.well-known/oauth-protected-resource/mcp"
+  // Protected Resource Metadata (PRM) endpoints - RFC 9728 §3, MCP 2025-06-18
+  // https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#authorization-server-location
   if (env.AUTH_ENABLED) {
-    app.get('/.well-known/oauth-protected-resource/mcp', (c) => {
+    const prmHandler = (c) => {
       const url = new URL(c.req.url);
       const baseUrl = `${url.protocol}//${url.host}`;
       const metadata = generateProtectedResourceMetadata({
@@ -318,8 +317,17 @@ export default function createApp() {
           'Cache-Control': 'max-age=3600',
         }
       });
-    });
+    };
+
+    // Primary endpoint: matches resource path component
+    app.get('/.well-known/oauth-protected-resource/mcp', prmHandler);
     app.options('/.well-known/oauth-protected-resource/mcp', (c) =>
+      metadataCorsOptionsRequestHandler()(c.req.raw)
+    );
+
+    // Fallback endpoint: root discovery
+    app.get('/.well-known/oauth-protected-resource', prmHandler);
+    app.options('/.well-known/oauth-protected-resource', (c) =>
       metadataCorsOptionsRequestHandler()(c.req.raw)
     );
   }
